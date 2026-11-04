@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LULL — connection test</title>
+<style>
+:root{--bg:#07090c;--fg:#d6dde3;--dim:#7d8893;--ok:#9fd38a;--bad:#e0796a;--acc:#e0a24a}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:28px 16px}
+main{max-width:620px;margin:0 auto}h1{font-weight:400;letter-spacing:.3em;font-size:20px;margin:0 0 4px}
+p{color:var(--dim);margin:0 0 20px}.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #1a1f26}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.wait{color:var(--dim)}#verdict{margin-top:20px;padding:14px;border:1px solid #1a1f26}
+button{margin-top:18px;background:none;color:var(--acc);border:1px solid var(--acc);font:inherit;padding:8px 16px;cursor:pointer}
+</style></head><body><main>
+<h1>LULL</h1><p>Connection test. Open this on the network you want to play on (school, home) before trying co-op.</p>
+<div class="row"><span>Website (HTTPS)</span><span id="r1" class="wait">testing…</span></div>
+<div class="row"><span>Live connection (WebSocket)</span><span id="r2" class="wait">waiting…</span></div>
+<div class="row"><span>Today’s multiplayer budget</span><span id="r3" class="wait">waiting…</span></div>
+<div id="verdict" class="wait">…</div>
+<button id="again">Run again</button>
+<script>
+const $=id=>document.getElementById(id);
+const set=(id,t,c)=>{$(id).textContent=t;$(id).className=c;};
+async function run(){
+ set('r1','testing…','wait');set('r2','waiting…','wait');set('r3','waiting…','wait');set('verdict','…','wait');
+ let http=false,ws=null;
+ try{let best=1e9;for(let i=0;i<4;i++){const t=performance.now();const r=await fetch('/api/ping',{cache:'no-store'});await r.json();best=Math.min(best,performance.now()-t);}http=true;set('r1','OK · '+(best|0)+' ms','ok');}
+ catch(e){set('r1','FAILED','bad');}
+ if(http){ws=await new Promise(res=>{let w;try{w=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/echo');}catch(e){res(null);return;}
+  const times=[];let t;const to=setTimeout(()=>{try{w.close();}catch(e){}res(times.length?times:null);},6000);
+  w.onopen=()=>{t=performance.now();w.send('x');};w.onmessage=()=>{times.push(performance.now()-t);if(times.length>=6){clearTimeout(to);w.close();res(times);}else{t=performance.now();w.send('x');}};w.onerror=()=>{clearTimeout(to);res(null);};});
+  if(ws){const a=ws.reduce((s,v)=>s+v,0)/ws.length;set('r2','OK · '+(a|0)+' ms average','ok');}else set('r2','BLOCKED','bad');
+  try{const s=await (await fetch('/api/status',{cache:'no-store'})).json();set('r3',Math.min(100,Math.round(s.used/s.limit*100))+'% used','ok');}catch(e){set('r3','unknown','wait');}}
+ let v;
+ if(!http)v=['bad','This network can’t reach the server at all. Nothing online will work here (the game file itself can still be played offline).'];
+ else if(!ws)v=['bad','This network blocks live connections. Accounts and cloud saves work; co-op does not.'];
+ else{const a=ws.reduce((s,x)=>s+x,0)/ws.length;v=a<120?['ok','Good for co-op.']:a<250?['ok','Co-op will work, slightly laggy.']:['bad','Co-op will work but feel very laggy.'];}
+ set('verdict',v[1],v[0]);
+}
+$('again').onclick=run;run();
+</script></main></body></html>
