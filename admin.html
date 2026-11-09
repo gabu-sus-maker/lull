@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>LULL — admin</title>
+<style>
+:root{--bg:#07090c;--fg:#d6dde3;--dim:#7d8893;--ok:#9fd38a;--bad:#e0796a;--acc:#e0a24a;--line:#1a1f26}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 ui-monospace,Menlo,Consolas,monospace;padding:28px 16px}
+main{max-width:680px;margin:0 auto}h1{font-weight:400;letter-spacing:.3em;font-size:20px;margin:0}h2{font-weight:400;font-size:15px;letter-spacing:.2em;color:var(--acc);margin:26px 0 8px}
+p{color:var(--dim);margin:6px 0 14px}input{background:#05070a;color:var(--fg);border:1px solid #2a313a;font:inherit;padding:8px 10px;width:100%;box-sizing:border-box}
+.r{display:flex;gap:8px;margin:8px 0}.r input{flex:1}button{background:none;color:var(--acc);border:1px solid var(--acc);font:inherit;padding:8px 14px;cursor:pointer;white-space:nowrap}
+button.danger{color:var(--bad);border-color:var(--bad)}#out{white-space:pre-wrap;border:1px solid var(--line);padding:12px;min-height:3em;margin-top:14px}
+table{width:100%;border-collapse:collapse;margin-top:8px}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--line);font-weight:400}th{color:var(--dim)}
+.code{font-size:28px;letter-spacing:.3em;color:var(--acc)}
+</style></head><body><main>
+<h1>LULL · ADMIN</h1>
+<p>Only for whoever runs the server. Type the admin key each time — this page never stores it. Five wrong keys locks this network out for an hour.</p>
+<input id="key" type="password" placeholder="Admin key (the ADMIN_KEY secret you set in Cloudflare)" autocomplete="off">
+<h2>Someone forgot their password</h2>
+<p>This makes a one-time code that works for 24 hours. Give it to them in person — they choose a new password with it (Sign in → I have a reset code). You never see their password.</p>
+<div class="r"><input id="ru" placeholder="their username"><button id="reset">Make reset code</button></div>
+<h2>Players</h2>
+<div class="r"><button id="users">List players</button><button id="usage">Show usage</button></div>
+<h2>Delete an account</h2>
+<p>Permanent: removes the account and its cloud save. Type the username twice.</p>
+<div class="r"><input id="du" placeholder="username"><input id="du2" placeholder="same username again"><button id="del" class="danger">Delete</button></div>
+<div id="out"></div>
+<script>
+const $=id=>document.getElementById(id),out=$('out');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function call(path,body){const r=await fetch('/api/admin/'+path,{method:body?'POST':'GET',headers:{'content-type':'application/json','x-admin-key':$('key').value},body:body?JSON.stringify(body):undefined});let j={};try{j=await r.json();}catch(e){}return{ok:r.ok,j};}
+const show=(html)=>{out.innerHTML=html;};
+$('reset').onclick=async()=>{const u=$('ru').value.trim();if(!u)return;const r=await call('reset',{u});
+ if(!r.ok||r.j.error)return show('<span style="color:var(--bad)">'+esc(r.j.error||'Failed')+'</span>');
+ show('Reset code for <b>'+esc(r.j.u)+'</b> (valid 24 hours, works once):<div class="code">'+esc(r.j.code)+'</div>');};
+$('users').onclick=async()=>{const r=await call('users');if(!r.ok)return show('<span style="color:var(--bad)">'+esc(r.j.error||'Failed')+'</span>');
+ show('<table><tr><th>username</th><th>joined</th><th>cloud save</th></tr>'+r.j.map(u=>'<tr><td>'+esc(u.u)+'</td><td>'+new Date(u.created).toLocaleDateString()+'</td><td>'+(u.saved?new Date(u.saved).toLocaleString():'—')+'</td></tr>').join('')+'</table>');};
+$('usage').onclick=async()=>{const r=await call('usage');if(!r.ok)return show('<span style="color:var(--bad)">'+esc(r.j.error||'Failed')+'</span>');
+ show('Daily budget: '+r.j.limit.toLocaleString()+' messages<table><tr><th>day (UTC)</th><th>messages</th><th>%</th><th>games</th><th>players</th></tr>'+r.j.days.map(d=>'<tr><td>'+d.d+'</td><td>'+d.msgs.toLocaleString()+'</td><td>'+Math.round(d.msgs/r.j.limit*100)+'%</td><td>'+d.rooms+'</td><td>'+d.players+'</td></tr>').join('')+'</table>');};
+$('del').onclick=async()=>{const u=$('du').value.trim();if(!u||u!==$('du2').value.trim())return show('Type the same username in both boxes.');const r=await call('delete',{u});
+ show(r.j.deleted?'Deleted '+esc(r.j.deleted)+'.':'<span style="color:var(--bad)">'+esc(r.j.error||'Failed')+'</span>');};
+</script></main></body></html>
